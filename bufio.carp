@@ -1,0 +1,124 @@
+(doc BufReader "is a buffered I/O wrapper that works with any stream type
+implementing the `stream-read` and `stream-write` interfaces.
+
+## Interfaces
+
+Implement these for your stream type to use BufReader:
+
+```
+(definterface stream-read (Fn [&a &(Array Byte) Int] Int))
+(definterface stream-write (Fn [&a &(Array Byte)] Int))
+(definterface stream-close (Fn [a] ()))
+```
+
+## Usage
+
+```
+; Wrap a TcpStream (if socket library implements the interfaces)
+(let [br (BufReader.wrap stream)]
+  (do
+    (match (BufReader.read-line &br)
+      (Result.Success line) (println* &line)
+      (Result.Error e) (IO.errorln &e))
+    (BufReader.delete br)))
+```")
+
+(relative-include "src/bufio.h")
+(register-type BufReader)
+
+; ---------------------------------------------------------------------------
+; Interfaces — implement these for any stream type to use with BufReader
+; ---------------------------------------------------------------------------
+
+(definterface stream-read (Fn [&a &(Array Byte) Int] Int))
+(definterface stream-write (Fn [&a &(Array Byte)] Int))
+(definterface stream-close (Fn [a] ()))
+
+(defmodule BufReader
+  ; -- private C bindings --
+  (private create-)
+  (hidden create-)
+  (register create- (Fn [(Ptr ()) (Ptr ()) (Ptr ()) (Ptr ())] BufReader) "BufReader_create_")
+  (private read-line-)
+  (hidden read-line-)
+  (register read-line- (Fn [&BufReader] String) "BufReader_read_MINUS_line_")
+  (private read-until-)
+  (hidden read-until-)
+  (register read-until- (Fn [&BufReader Char] String) "BufReader_read_MINUS_until_")
+  (private read-n-)
+  (hidden read-n-)
+  (register read-n- (Fn [&BufReader Int] (Array Byte)) "BufReader_read_MINUS_n_")
+  (private read-append-)
+  (hidden read-append-)
+  (register read-append- (Fn [&BufReader &(Array Byte)] Int) "BufReader_read_MINUS_append_")
+  (private write-)
+  (hidden write-)
+  (register write- (Fn [&BufReader &String] Int) "BufReader_write_")
+  (private write-bytes-)
+  (hidden write-bytes-)
+  (register write-bytes- (Fn [&BufReader &(Array Byte)] Int) "BufReader_write_MINUS_bytes_")
+  (private flush-)
+  (hidden flush-)
+  (register flush- (Fn [&BufReader] Int) "BufReader_flush_")
+
+  ; -- lifecycle --
+
+  (doc delete "closes the underlying stream and frees all buffers.")
+  (register delete (Fn [BufReader] ()))
+
+  (register copy (Fn [&BufReader] BufReader))
+  (implements copy BufReader.copy)
+
+  ; -- public API --
+
+  (doc read-line "reads until a newline character, returning the line including
+the delimiter. Returns `(Result String String)`.")
+  (defn read-line [br]
+    (let [s (read-line- br)]
+      (if (String.empty? &s)
+        (Result.Error @"connection closed")
+        (Result.Success s))))
+
+  (doc read-until "reads until the given delimiter byte. Returns `(Result String String)`.")
+  (defn read-until [br delim]
+    (let [s (read-until- br delim)]
+      (if (String.empty? &s)
+        (Result.Error @"connection closed")
+        (Result.Success s))))
+
+  (doc read-n "reads exactly `n` bytes. Returns `(Result (Array Byte) String)`.
+May return fewer bytes on EOF.")
+  (defn read-n [br n]
+    (let [arr (read-n- br n)]
+      (if (= (Array.length &arr) 0)
+        (Result.Error @"connection closed")
+        (Result.Success arr))))
+
+  (doc read-append "reads available data and appends to the byte buffer.
+Returns `(Result Int String)` with the number of bytes read.")
+  (defn read-append [br buf]
+    (let [n (read-append- br buf)]
+      (if (= n -1)
+        (Result.Error @"read error")
+        (Result.Success n))))
+
+  (doc write "buffers string data for writing. Call `flush` to send.")
+  (defn write [br data]
+    (write- br data))
+
+  (doc write-bytes "buffers binary data for writing. Call `flush` to send.")
+  (defn write-bytes [br data]
+    (write-bytes- br data))
+
+  (doc flush "sends all buffered write data. Returns `(Result () String)`.")
+  (defn flush [br]
+    (if (= (flush- br) -1)
+      (Result.Error @"write error")
+      (Result.Success ())))
+
+  (doc clear-read "discards all buffered read data.")
+  (register clear-read (Fn [&BufReader] ()) "BufReader_clear_MINUS_read")
+
+  (doc clear-write "discards all buffered write data without sending.")
+  (register clear-write (Fn [&BufReader] ()) "BufReader_clear_MINUS_write")
+)
