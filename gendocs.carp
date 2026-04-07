@@ -1,0 +1,34 @@
+(load "bufio.carp")
+
+(Project.config "title" "bufio")
+(Project.config "docs-directory" "./docs/")
+(Project.config "docs-logo" "")
+(Project.config "docs-url" "https://github.com/carpentry-org/bufio")
+(Project.config "docs-styling" "../style.css")
+(Project.config "docs-prelude" "Generic buffered I/O for Carp. Wraps any stream
+implementing `stream-read` and `stream-write` with buffered line-oriented and
+size-delimited reading, and buffered writing.
+
+### Interfaces
+
+Implement these for your stream type:
+```
+(definterface stream-read (Fn [&a &(Array Byte) Int] Int))
+(definterface stream-write (Fn [&a &(Array Byte)] Int))
+(definterface stream-close (Fn [a] ()))
+```
+
+### Usage (with TCP sockets)
+```
+(let [br (TcpStream.buffered stream)]
+  (do
+    (BufReader.write &br \"GET / HTTP/1.0\\r\\n\\r\\n\")
+    (ignore (BufReader.flush &br))
+    (match (BufReader.read-line &br)
+      (Result.Success line) (println* &line)
+      _ ())
+    (BufReader.delete br)))
+```")
+
+(save-docs BufReader)
+(quit)
