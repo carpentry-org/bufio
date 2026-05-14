@@ -1,0 +1,52 @@
+<!DOCTYPE HTML>
+
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+        <link rel="stylesheet" href="../style.css">
+    </head>
+    <body>
+        <div class="content">
+            <a href="https://github.com/carpentry-org/bufio">
+                <div class="logo">
+                    <img src="" alt="Logo">
+                    <div class="index">
+                        <ul>
+                            <li>
+                                <a href="BufReader.html">
+                                    BufReader
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div>
+                    <h1>
+                        bufio
+                    </h1>
+                    <p>Generic buffered I/O for Carp. Wraps any stream
+implementing <code>stream-read</code> and <code>stream-write</code> with buffered line-oriented and
+size-delimited reading, and buffered writing.</p>
+<h3>Interfaces</h3>
+<p>Implement these for your stream type:</p>
+<pre><code>(definterface stream-read (Fn [&amp;a &amp;(Array Byte) Int] Int))
+(definterface stream-write (Fn [&amp;a &amp;(Array Byte)] Int))
+(definterface stream-close (Fn [a] ()))
+</code></pre>
+<h3>Usage (with TCP sockets)</h3>
+<pre><code>(let [br (TcpStream.buffered stream)]
+  (do
+    (BufReader.write &amp;br &quot;GET / HTTP/1.0\r\n\r\n&quot;)
+    (ignore (BufReader.flush &amp;br))
+    (match (BufReader.read-line &amp;br)
+      (Result.Success line) (println* &amp;line)
+      _ ())
+    (BufReader.delete br)))
+</code></pre>
+
+                </div>
+            </a>
+        </div>
+    </body>
+</html>
