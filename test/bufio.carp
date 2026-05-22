@@ -1,0 +1,196 @@
+(load "Test.carp")
+(load "../bufio.carp")
+(relative-include "mock_stream.h")
+
+(register mock-bufreader-create
+  (Fn [&String Int] BufReader)
+  "mock_bufreader_create")
+(register mock-get-output (Fn [] String) "mock_get_output")
+(register mock-is-closed? (Fn [] Bool) "mock_is_closed")
+(register mock-cleanup (Fn [] ()) "mock_cleanup")
+(register mock-bytes-to-string
+  (Fn [&(Array Byte)] String)
+  "mock_bytes_to_string")
+
+(use Test)
+
+(deftest test
+  ; --- read-line ---
+
+  (assert-equal test "hello
+" &(let-do [br (mock-bufreader-create "hello
+world
+" 0)
+            r (BufReader.read-line &br)] (BufReader.delete br) (mock-cleanup) (match r
+        (Result.Success s) s
+        (Result.Error _) @"ERROR")) "read-line returns first line with newline")
+
+  (assert-equal test "world
+" &(let-do [br (mock-bufreader-create "hello
+world
+" 0)
+            first-line (BufReader.read-line &br)
+            r (BufReader.read-line &br)] (BufReader.delete br) (mock-cleanup) (match r
+        (Result.Success s) s
+        (Result.Error _) @"ERROR")) "read-line returns second line")
+
+  (assert-equal test
+    "no newline"
+    &(let-do [br (mock-bufreader-create "no newline" 0)
+              r (BufReader.read-line &br)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success s) s (Result.Error _) @"ERROR"))
+    "read-line returns remaining data at EOF without newline")
+
+  (assert-equal test
+    "connection closed"
+    &(let-do [br (mock-bufreader-create "" 0)
+              r (BufReader.read-line &br)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
+    "read-line returns error on empty stream")
+
+  ; --- read-until ---
+
+  (assert-equal test
+    "key;"
+    &(let-do [br (mock-bufreader-create "key;value;" 0)
+              r (BufReader.read-until &br \;)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success s) s (Result.Error _) @"ERROR"))
+    "read-until stops at delimiter")
+
+  (assert-equal test
+    "no delim here"
+    &(let-do [br (mock-bufreader-create "no delim here" 0)
+              r (BufReader.read-until &br \;)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success s) s (Result.Error _) @"ERROR"))
+    "read-until returns all data when delimiter not found")
+
+  ; --- read-n ---
+
+  (assert-equal test
+    "hello"
+    &(let-do [br (mock-bufreader-create "hello world" 0)
+              r (BufReader.read-n &br 5)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r
+        (Result.Success arr) (mock-bytes-to-string &arr)
+        (Result.Error _) @"ERROR"))
+    "read-n returns exact bytes requested")
+
+  (assert-equal test
+    "hi"
+    &(let-do [br (mock-bufreader-create "hi" 0)
+              r (BufReader.read-n &br 10)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r
+        (Result.Success arr) (mock-bytes-to-string &arr)
+        (Result.Error _) @"ERROR"))
+    "read-n returns fewer bytes at EOF")
+
+  (assert-equal test
+    "connection closed"
+    &(let-do [br (mock-bufreader-create "" 0)
+              r (BufReader.read-n &br 5)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
+    "read-n returns error on empty stream")
+
+  ; --- read-append ---
+
+  (assert-equal test
+    5
+    (let-do [br (mock-bufreader-create "hello" 0)
+             buf (Array.replicate 0 &(Byte.from-int 0))
+             r (BufReader.read-append &br &buf)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success n) n (Result.Error _) -1))
+    "read-append returns byte count")
+
+  ; --- write and flush ---
+
+  (assert-equal test
+    "hello world"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "write and flush sends data to stream")
+
+  (assert-equal test
+    "AB"
+    &(let-do [br (mock-bufreader-create "" 0)
+              data [(Byte.from-int 65) (Byte.from-int 66)]]
+      (ignore (BufReader.write-bytes &br &data))
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "write-bytes and flush sends bytes to stream")
+
+  (assert-true test
+    (let-do [br (mock-bufreader-create "" 0)
+             r (BufReader.flush &br)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) true (Result.Error _) false))
+    "flush succeeds when nothing buffered")
+
+  ; --- clear-read ---
+
+  (assert-equal test
+    "connection closed"
+    &(let-do [br (mock-bufreader-create "first
+second
+" 0)
+              first-line (BufReader.read-line &br)] (BufReader.clear-read &br) (let-do [r (BufReader.read-line &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "clear-read discards buffered data")
+
+  ; --- clear-write ---
+
+  (assert-equal test
+    ""
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "discarded"))
+      (BufReader.clear-write &br)
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "clear-write discards buffered writes")
+
+  ; --- close ---
+
+  (assert-true test
+    (let-do [br (mock-bufreader-create "" 0)]
+      (BufReader.delete br)
+      (let-do [closed (mock-is-closed?)] (mock-cleanup) closed))
+    "delete calls close on the stream")
+
+  ; --- partial reads (small chunk size) ---
+
+  (assert-equal test "hello
+" &(let-do [br (mock-bufreader-create "hello
+world
+" 3)
+            r (BufReader.read-line &br)] (BufReader.delete br) (mock-cleanup) (match r
+        (Result.Success s) s
+        (Result.Error _) @"ERROR")) "read-line works with small read chunks"))
