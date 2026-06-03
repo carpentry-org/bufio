@@ -19,6 +19,12 @@ jobs:
       - name: Setup Carp
         uses: carpentry-org/setup-carp@v1
 
+      - name: Run tests
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          carp -x test/bufio.carp
+
       - name: Install angler
         run: |
           set -euo pipefail
