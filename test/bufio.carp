@@ -15,7 +15,6 @@
 (use Test)
 
 (deftest test
-
   (assert-equal test "hello
 " &(let-do [br (mock-bufreader-create "hello
 world
