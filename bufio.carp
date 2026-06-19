@@ -26,16 +26,11 @@ Implement these for your stream type to use BufReader:
 (relative-include "src/bufio.h")
 (register-type BufReader)
 
-; ---------------------------------------------------------------------------
-; Interfaces — implement these for any stream type to use with BufReader
-; ---------------------------------------------------------------------------
-
 (definterface stream-read (Fn [&a &(Array Byte) Int] Int))
 (definterface stream-write (Fn [&a &(Array Byte)] Int))
 (definterface stream-close (Fn [a] ()))
 
 (defmodule BufReader
-  ; -- private C bindings --
   (private create-)
   (hidden create-)
   (register create-
@@ -69,15 +64,11 @@ Implement these for your stream type to use BufReader:
   (hidden flush-)
   (register flush- (Fn [&BufReader] Int) "BufReader_flush_")
 
-  ; -- lifecycle --
-
   (doc delete "closes the underlying stream and frees all buffers.")
   (register delete (Fn [BufReader] ()))
 
   (register copy (Fn [&BufReader] BufReader))
   (implements copy BufReader.copy)
-
-  ; -- public API --
 
   (doc read-line "reads until a newline character, returning the line including
 the delimiter. Returns `(Result String String)`.")

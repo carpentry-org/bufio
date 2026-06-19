@@ -15,7 +15,6 @@
 (use Test)
 
 (deftest test
-  ; --- read-line ---
 
   (assert-equal test "hello
 " &(let-do [br (mock-bufreader-create "hello
@@ -52,8 +51,6 @@ world
       (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
     "read-line returns error on empty stream")
 
-  ; --- read-until ---
-
   (assert-equal test
     "key;"
     &(let-do [br (mock-bufreader-create "key;value;" 0)
@@ -71,8 +68,6 @@ world
       (mock-cleanup)
       (match r (Result.Success s) s (Result.Error _) @"ERROR"))
     "read-until returns all data when delimiter not found")
-
-  ; --- read-n ---
 
   (assert-equal test
     "hello"
@@ -105,8 +100,6 @@ world
       (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
     "read-n returns error on empty stream")
 
-  ; --- read-append ---
-
   (assert-equal test
     5
     (let-do [br (mock-bufreader-create "hello" 0)
@@ -116,8 +109,6 @@ world
       (mock-cleanup)
       (match r (Result.Success n) n (Result.Error _) -1))
     "read-append returns byte count")
-
-  ; --- write and flush ---
 
   (assert-equal test
     "hello world"
@@ -150,8 +141,6 @@ world
       (match r (Result.Success _) true (Result.Error _) false))
     "flush succeeds when nothing buffered")
 
-  ; --- clear-read ---
-
   (assert-equal test
     "connection closed"
     &(let-do [br (mock-bufreader-create "first
@@ -162,8 +151,6 @@ second
         (mock-cleanup)
         (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
     "clear-read discards buffered data")
-
-  ; --- clear-write ---
 
   (assert-equal test
     ""
@@ -177,15 +164,11 @@ second
         output))
     "clear-write discards buffered writes")
 
-  ; --- close ---
-
   (assert-true test
     (let-do [br (mock-bufreader-create "" 0)]
       (BufReader.delete br)
       (let-do [closed (mock-is-closed?)] (mock-cleanup) closed))
     "delete calls close on the stream")
-
-  ; --- partial reads (small chunk size) ---
 
   (assert-equal test "hello
 " &(let-do [br (mock-bufreader-create "hello
