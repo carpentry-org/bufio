@@ -27,7 +27,7 @@ world
 " &(let-do [br (mock-bufreader-create "hello
 world
 " 0)
-            first-line (BufReader.read-line &br)
+            _first-line (BufReader.read-line &br)
             r (BufReader.read-line &br)] (BufReader.delete br) (mock-cleanup) (match r
         (Result.Success s) s
         (Result.Error _) @"ERROR")) "read-line returns second line")
@@ -145,7 +145,7 @@ world
     &(let-do [br (mock-bufreader-create "first
 second
 " 0)
-              first-line (BufReader.read-line &br)] (BufReader.clear-read &br) (let-do [r (BufReader.read-line &br)]
+              _first-line (BufReader.read-line &br)] (BufReader.clear-read &br) (let-do [r (BufReader.read-line &br)]
         (BufReader.delete br)
         (mock-cleanup)
         (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
