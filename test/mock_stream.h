@@ -14,6 +14,9 @@ typedef struct {
   int output_cap;
   int closed;
   int chunk_size;
+  int write_max;
+  int write_budget;
+  int write_fail_code;
 } MockStream;
 
 static MockStream* g_mock = NULL;
@@ -32,6 +35,12 @@ static int mock_stream_read(void* inner, char* buf, int len) {
 
 static int mock_stream_write(void* inner, const char* buf, int len) {
   MockStream* ms = (MockStream*)inner;
+  if (ms->write_max > 0 && len > ms->write_max) len = ms->write_max;
+  if (ms->write_budget >= 0) {
+    if (ms->write_budget == 0) return ms->write_fail_code;
+    if (len > ms->write_budget) len = ms->write_budget;
+    ms->write_budget -= len;
+  }
   if (ms->output_len + len > ms->output_cap) {
     ms->output_cap = (ms->output_len + len) * 2;
     ms->output = (char*)realloc(ms->output, ms->output_cap);
@@ -57,10 +66,25 @@ static BufReader mock_bufreader_create(String* data, int chunk_size) {
   ms->output_cap = 1024;
   ms->closed = 0;
   ms->chunk_size = chunk_size;
+  ms->write_max = 0;
+  ms->write_budget = -1;
+  ms->write_fail_code = -1;
   g_mock = ms;
   return BufReader_create_(
     (void*)ms, mock_stream_read, mock_stream_write, mock_stream_close);
 }
+
+/* max_per_write 0 = unlimited; budget < 0 = unlimited, else bytes accepted
+   before every further write returns fail_code */
+static void mock_set_write_limits(int max_per_write, int budget,
+                                  int fail_code) {
+  if (!g_mock) return;
+  g_mock->write_max = max_per_write;
+  g_mock->write_budget = budget;
+  g_mock->write_fail_code = fail_code;
+}
+
+static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
 
 static String mock_get_output(void) {
   if (!g_mock || g_mock->output_len == 0) {
