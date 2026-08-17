@@ -105,6 +105,15 @@ world
     "read-n returns error on empty stream")
 
   (assert-equal test
+    "connection closed"
+    &(let-do [br (mock-bufreader-create "hello world" 0)
+              r (BufReader.read-n &br -1)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
+    "read-n rejects a negative count instead of crashing")
+
+  (assert-equal test
     5
     (let-do [br (mock-bufreader-create "hello" 0)
              buf (Array.replicate 0 &(Byte.from-int 0))

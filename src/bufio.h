@@ -145,11 +145,18 @@ String BufReader_read_MINUS_line_(BufReader* br) {
 
 Array BufReader_read_MINUS_n_(BufReader* br, int n) {
   Array result;
-  result.data = CARP_MALLOC(n);
-  result.capacity = n;
+  result.data = NULL;
+  result.capacity = 0;
   result.len = 0;
+  /* A non-positive count has nothing to allocate or read; returning the empty
+     array keeps `result.len < (size_t)n` from wrapping a negative `n` into a
+     huge bound and copying into an unallocated buffer. */
+  if (n <= 0) return result;
+  result.data = CARP_MALLOC((size_t)n);
+  if (!result.data) return result;
+  result.capacity = (size_t)n;
 
-  while (result.len < n) {
+  while (result.len < (size_t)n) {
     int avail = bufreader_available(br);
     if (avail > 0) {
       int want = n - result.len;
