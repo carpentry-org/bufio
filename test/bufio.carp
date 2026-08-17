@@ -5,6 +5,10 @@
 (register mock-bufreader-create
   (Fn [&String Int] BufReader)
   "mock_bufreader_create")
+(register mock-set-write-limits (Fn [Int Int Int] ()) "mock_set_write_limits")
+(register mock-buffered-write-len
+  (Fn [&BufReader] Int)
+  "mock_buffered_write_len")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
 (register mock-cleanup (Fn [] ()) "mock_cleanup")
@@ -175,4 +179,76 @@ world
 " 3)
             r (BufReader.read-line &br)] (BufReader.delete br) (mock-cleanup) (match r
         (Result.Success s) s
-        (Result.Error _) @"ERROR")) "read-line works with small read chunks"))
+        (Result.Error _) @"ERROR")) "read-line works with small read chunks")
+
+  (assert-equal test
+    "hello world"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 3 -1 -1)
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "flush keeps writing until the buffer is drained")
+
+  (assert-equal test
+    6
+    (let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 0 5 -1)
+      (ignore (BufReader.flush &br))
+      (let-do [left (mock-buffered-write-len &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        left))
+    "a flush that fails partway buffers only the unwritten remainder")
+
+  (assert-equal test
+    "hello world"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 0 5 -1)
+      (ignore (BufReader.flush &br))
+      (mock-set-write-limits 0 -1 -1)
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "retrying a failed flush sends every byte exactly once")
+
+  (assert-equal test
+    "write error"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 0 5 -1)
+      (let-do [r (BufReader.flush &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a flush that fails partway reports an error")
+
+  (assert-equal test
+    11
+    (let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 0 0 -1)
+      (ignore (BufReader.flush &br))
+      (let-do [left (mock-buffered-write-len &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        left))
+    "a flush that writes nothing keeps the whole buffer")
+
+  (assert-equal test
+    "write error"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br "hello world"))
+      (mock-set-write-limits 0 0 0)
+      (let-do [r (BufReader.flush &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a stream accepting zero bytes fails the flush instead of spinning"))

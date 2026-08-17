@@ -187,11 +187,13 @@ int BufReader_flush_(BufReader* br) {
   int total = 0;
   while (total < br->wbuf_len) {
     int n = br->write_fn(br->inner, br->wbuf + total, br->wbuf_len - total);
-    if (n <= 0) return -1;
+    if (n <= 0) break;
     total += n;
   }
-  br->wbuf_len = 0;
-  return 0;
+  int remaining = total < br->wbuf_len ? br->wbuf_len - total : 0;
+  if (total > 0 && remaining > 0) memmove(br->wbuf, br->wbuf + total, remaining);
+  br->wbuf_len = remaining;
+  return remaining == 0 ? 0 : -1;
 }
 
 void BufReader_clear_MINUS_read(BufReader* br) {

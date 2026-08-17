@@ -106,7 +106,10 @@ Returns `(Result Int String)` with the number of bytes read.")
   (doc write-bytes "buffers binary data for writing. Call `flush` to send.")
   (defn write-bytes [br data] (write-bytes- br data))
 
-  (doc flush "sends all buffered write data. Returns `(Result () String)`.")
+  (doc flush "sends all buffered write data. Returns `(Result () String)`.
+
+On error the buffer keeps exactly the bytes the stream did not accept, so
+calling `flush` again resumes instead of re-sending the accepted prefix.")
   (defn flush [br]
     (if (= (flush- br) -1) (Result.Error @"write error") (Result.Success ())))
 

@@ -145,6 +145,8 @@ implementing the <code>stream-read</code> and <code>stream-write</code> interfac
                     </pre>
                     <p class="doc">
                         <p>sends all buffered write data. Returns <code>(Result () String)</code>.</p>
+<p>On error the buffer keeps exactly the bytes the stream did not accept, so
+calling <code>flush</code> again resumes instead of re-sending the accepted prefix.</p>
 
                     </p>
                 </div>
