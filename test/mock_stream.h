@@ -88,10 +88,10 @@ static void mock_set_write_limits(int max_per_write, int budget,
 static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
 
 /* Long-typed view of bufio_next_cap, which takes and returns size_t; -1 for an
-   argument that is not a capacity. */
+   argument that not every size_t can represent. */
 static int64_t bufio_next_cap_long(int64_t have, int64_t need) {
-  if (have < 0 || need < 0 || have > (int64_t)BUFIO_MAX_CAP) return -1;
-  if (need > (int64_t)BUFIO_MAX_CAP) return 0;
+  if (have < 0 || need < 0 || have > 0xFFFFFFFFLL || need > 0xFFFFFFFFLL)
+    return -1;
   return (int64_t)bufio_next_cap((size_t)have, (size_t)need);
 }
 

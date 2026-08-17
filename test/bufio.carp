@@ -9,7 +9,7 @@
 (register mock-buffered-write-len
   (Fn [&BufReader] Int)
   "mock_buffered_write_len")
-(register bufio-next-cap (Fn [Long Long] Long) "bufio_next_cap_long")
+(register bufio-next-cap-long (Fn [Long Long] Long) "bufio_next_cap_long")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
 (register mock-cleanup (Fn [] ()) "mock_cleanup")
@@ -277,25 +277,25 @@ world
 
   (assert-equal test
     16384l
-    (bufio-next-cap 8192l 8193l)
+    (bufio-next-cap-long 8192l 8193l)
     "the next capacity doubles what is there")
 
   (assert-equal test
     100000l
-    (bufio-next-cap 8192l 100000l)
+    (bufio-next-cap-long 8192l 100000l)
     "the next capacity meets a request larger than double")
 
   (assert-equal test
     2147483647l
-    (bufio-next-cap 1073741824l 1073741825l)
+    (bufio-next-cap-long 1073741824l 1073741825l)
     "the next capacity clamps at the maximum instead of overflowing")
 
   (assert-equal test
     0l
-    (bufio-next-cap 1073741824l (Long.+ 2147483647l 1l))
+    (bufio-next-cap-long 1073741824l (Long.+ 2147483647l 1l))
     "a request past the maximum is refused")
 
   (assert-equal test
     -1l
-    (bufio-next-cap 1073741824l -1l)
+    (bufio-next-cap-long 1073741824l -1l)
     "a request that is not a size is refused"))
