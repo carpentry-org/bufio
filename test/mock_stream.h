@@ -1,6 +1,7 @@
 #ifndef MOCK_STREAM_H
 #define MOCK_STREAM_H
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -85,6 +86,14 @@ static void mock_set_write_limits(int max_per_write, int budget,
 }
 
 static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
+
+/* Long-typed view of bufio_next_cap, which takes and returns size_t; -1 for an
+   argument that is not a capacity. */
+static int64_t bufio_next_cap_long(int64_t have, int64_t need) {
+  if (have < 0 || need < 0 || have > (int64_t)BUFIO_MAX_CAP) return -1;
+  if (need > (int64_t)BUFIO_MAX_CAP) return 0;
+  return (int64_t)bufio_next_cap((size_t)have, (size_t)need);
+}
 
 static String mock_get_output(void) {
   if (!g_mock || g_mock->output_len == 0) {

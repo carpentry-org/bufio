@@ -9,7 +9,7 @@
 (register mock-buffered-write-len
   (Fn [&BufReader] Int)
   "mock_buffered_write_len")
-(register bufio-next-cap (Fn [Long Long] Long) "bufio_next_cap")
+(register bufio-next-cap (Fn [Long Long] Long) "bufio_next_cap_long")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
 (register mock-cleanup (Fn [] ()) "mock_cleanup")
@@ -293,4 +293,9 @@ world
   (assert-equal test
     0l
     (bufio-next-cap 1073741824l (Long.+ 2147483647l 1l))
-    "a request past the maximum is refused"))
+    "a request past the maximum is refused")
+
+  (assert-equal test
+    -1l
+    (bufio-next-cap 1073741824l -1l)
+    "a request that is not a size is refused"))
