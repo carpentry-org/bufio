@@ -250,6 +250,8 @@ May return fewer bytes on EOF.</p>
                     </pre>
                     <p class="doc">
                         <p>buffers string data for writing. Call <code>flush</code> to send.</p>
+<p>Returns the number of bytes buffered, or <code>-1</code> if the write buffer could not
+grow, in which case nothing was buffered.</p>
 
                     </p>
                 </div>
@@ -270,6 +272,8 @@ May return fewer bytes on EOF.</p>
                     </pre>
                     <p class="doc">
                         <p>buffers binary data for writing. Call <code>flush</code> to send.</p>
+<p>Returns the number of bytes buffered, or <code>-1</code> if the write buffer could not
+grow, in which case nothing was buffered.</p>
 
                     </p>
                 </div>

@@ -9,6 +9,7 @@
 (register mock-buffered-write-len
   (Fn [&BufReader] Int)
   "mock_buffered_write_len")
+(register bufio-next-cap (Fn [Long Long] Long) "bufio_next_cap")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
 (register mock-cleanup (Fn [] ()) "mock_cleanup")
@@ -251,4 +252,45 @@ world
         (BufReader.delete br)
         (mock-cleanup)
         (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
-    "a stream accepting zero bytes fails the flush instead of spinning"))
+    "a stream accepting zero bytes fails the flush instead of spinning")
+
+  (assert-true test
+    (let-do [payload (String.repeat 3000 "0123456789")
+             br (mock-bufreader-create &payload 0)
+             r (BufReader.read-until &br \;)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success s) (= &s &payload) (Result.Error _) false))
+    "a read past the default capacity returns every byte in order")
+
+  (assert-true test
+    (let-do [payload (String.repeat 3000 "0123456789")
+             br (mock-bufreader-create "" 0)]
+      (ignore (BufReader.write &br &payload))
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)
+               same (= &output &payload)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        same))
+    "a write past the default capacity is buffered and flushed whole")
+
+  (assert-equal test
+    16384l
+    (bufio-next-cap 8192l 8193l)
+    "the next capacity doubles what is there")
+
+  (assert-equal test
+    100000l
+    (bufio-next-cap 8192l 100000l)
+    "the next capacity meets a request larger than double")
+
+  (assert-equal test
+    2147483647l
+    (bufio-next-cap 1073741824l 1073741825l)
+    "the next capacity clamps at the maximum instead of overflowing")
+
+  (assert-equal test
+    0l
+    (bufio-next-cap 1073741824l (Long.+ 2147483647l 1l))
+    "a request past the maximum is refused"))

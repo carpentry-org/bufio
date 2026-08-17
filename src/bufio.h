@@ -1,9 +1,11 @@
 #ifndef CARP_BUFIO_H
 #define CARP_BUFIO_H
 
+#include <limits.h>
 #include <string.h>
 
 #define BUFIO_DEFAULT_CAP 8192
+#define BUFIO_MAX_CAP ((size_t)INT_MAX)
 
 /* Function pointer types for stream operations */
 typedef int (*bufio_read_fn)(void* inner, char* buf, int len);
@@ -51,6 +53,40 @@ void BufReader_delete(BufReader br) {
 
 /* --- Internal helpers --- */
 
+/* Capacity holding `need` bytes, doubling `have` first; 0 if `need` is
+   past BUFIO_MAX_CAP. */
+static size_t bufio_next_cap(size_t have, size_t need) {
+  if (need > BUFIO_MAX_CAP) return 0;
+  if (need <= have) return have;
+  size_t next = have > BUFIO_MAX_CAP / 2 ? BUFIO_MAX_CAP : have * 2;
+  return next < need ? need : next;
+}
+
+/* Make room for `extra` bytes past `used`. Returns 0, or -1 if the target is
+   past BUFIO_MAX_CAP or the allocation fails; *buf is untouched on failure. */
+static int bufio_reserve(char** buf, int* cap, size_t used, size_t extra) {
+  if (extra > BUFIO_MAX_CAP - used) return -1;
+  size_t next = bufio_next_cap((size_t)*cap, used + extra);
+  if (next <= (size_t)*cap) return 0;
+  char* grown = CARP_REALLOC(*buf, next);
+  if (!grown) return -1;
+  *buf = grown;
+  *cap = (int)next;
+  return 0;
+}
+
+/* Same for a Carp Array, whose length and capacity are size_t. */
+static int bufio_reserve_array(Array* buf, size_t extra) {
+  if (buf->len > BUFIO_MAX_CAP || extra > BUFIO_MAX_CAP - buf->len) return -1;
+  size_t next = bufio_next_cap(buf->capacity, buf->len + extra);
+  if (next <= buf->capacity) return 0;
+  void* grown = CARP_REALLOC(buf->data, next);
+  if (!grown) return -1;
+  buf->data = grown;
+  buf->capacity = next;
+  return 0;
+}
+
 static int bufreader_fill(BufReader* br) {
   /* compact */
   if (br->rbuf_pos > 0) {
@@ -59,11 +95,8 @@ static int bufreader_fill(BufReader* br) {
     br->rbuf_len = remaining;
     br->rbuf_pos = 0;
   }
-  /* grow if full */
-  if (br->rbuf_len >= br->rbuf_cap) {
-    br->rbuf_cap *= 2;
-    br->rbuf = CARP_REALLOC(br->rbuf, br->rbuf_cap);
-  }
+  if (bufio_reserve(&br->rbuf, &br->rbuf_cap, (size_t)br->rbuf_len, 1) != 0)
+    return -1;
   int space = br->rbuf_cap - br->rbuf_len;
   int n = br->read_fn(br->inner, br->rbuf + br->rbuf_len, space);
   if (n > 0) br->rbuf_len += n;
@@ -137,11 +170,7 @@ int BufReader_read_MINUS_append_(BufReader* br, Array* buf) {
   /* If we have buffered data, drain that first */
   int avail = bufreader_available(br);
   if (avail > 0) {
-    if ((int)(buf->capacity - buf->len) < avail) {
-      int new_cap = (buf->len + avail) * 2;
-      buf->data = CARP_REALLOC(buf->data, new_cap);
-      buf->capacity = new_cap;
-    }
+    if (bufio_reserve_array(buf, (size_t)avail) != 0) return -1;
     memcpy((char*)buf->data + buf->len, br->rbuf + br->rbuf_pos, avail);
     buf->len += avail;
     br->rbuf_pos += avail;
@@ -149,11 +178,7 @@ int BufReader_read_MINUS_append_(BufReader* br, Array* buf) {
   }
   /* Buffer empty — read directly into caller's buffer */
   int space = 4096;
-  if ((int)(buf->capacity - buf->len) < space) {
-    int new_cap = (buf->len + space) * 2;
-    buf->data = CARP_REALLOC(buf->data, new_cap);
-    buf->capacity = new_cap;
-  }
+  if (bufio_reserve_array(buf, (size_t)space) != 0) return -1;
   int n = br->read_fn(br->inner, (char*)buf->data + buf->len, space);
   if (n > 0) buf->len += n;
   return n;
@@ -162,24 +187,21 @@ int BufReader_read_MINUS_append_(BufReader* br, Array* buf) {
 /* --- Write operations --- */
 
 int BufReader_write_(BufReader* br, String* data) {
-  int len = strlen(*data);
-  if (br->wbuf_len + len > br->wbuf_cap) {
-    br->wbuf_cap = (br->wbuf_len + len) * 2;
-    br->wbuf = CARP_REALLOC(br->wbuf, br->wbuf_cap);
-  }
+  size_t len = strlen(*data);
+  if (bufio_reserve(&br->wbuf, &br->wbuf_cap, (size_t)br->wbuf_len, len) != 0)
+    return -1;
   memcpy(br->wbuf + br->wbuf_len, *data, len);
-  br->wbuf_len += len;
-  return len;
+  br->wbuf_len += (int)len;
+  return (int)len;
 }
 
 int BufReader_write_MINUS_bytes_(BufReader* br, Array* data) {
-  if (br->wbuf_len + (int)data->len > br->wbuf_cap) {
-    br->wbuf_cap = (br->wbuf_len + data->len) * 2;
-    br->wbuf = CARP_REALLOC(br->wbuf, br->wbuf_cap);
-  }
-  memcpy(br->wbuf + br->wbuf_len, data->data, data->len);
-  br->wbuf_len += data->len;
-  return data->len;
+  size_t len = data->len;
+  if (bufio_reserve(&br->wbuf, &br->wbuf_cap, (size_t)br->wbuf_len, len) != 0)
+    return -1;
+  memcpy(br->wbuf + br->wbuf_len, data->data, len);
+  br->wbuf_len += (int)len;
+  return (int)len;
 }
 
 int BufReader_flush_(BufReader* br) {

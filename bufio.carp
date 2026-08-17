@@ -100,10 +100,16 @@ Returns `(Result Int String)` with the number of bytes read.")
     (let [n (read-append- br buf)]
       (if (= n -1) (Result.Error @"read error") (Result.Success n))))
 
-  (doc write "buffers string data for writing. Call `flush` to send.")
+  (doc write "buffers string data for writing. Call `flush` to send.
+
+Returns the number of bytes buffered, or `-1` if the write buffer could not
+grow, in which case nothing was buffered.")
   (defn write [br data] (write- br data))
 
-  (doc write-bytes "buffers binary data for writing. Call `flush` to send.")
+  (doc write-bytes "buffers binary data for writing. Call `flush` to send.
+
+Returns the number of bytes buffered, or `-1` if the write buffer could not
+grow, in which case nothing was buffered.")
   (defn write-bytes [br data] (write-bytes- br data))
 
   (doc flush "sends all buffered write data. Returns `(Result () String)`.
