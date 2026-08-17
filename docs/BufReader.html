@@ -167,7 +167,8 @@ calling <code>flush</code> again resumes instead of re-sending the accepted pref
                     </pre>
                     <p class="doc">
                         <p>reads available data and appends to the byte buffer.
-Returns <code>(Result Int String)</code> with the number of bytes read.</p>
+Returns <code>(Result Int String)</code> with the number of bytes read; <code>0</code> means the
+stream ended. Nothing is appended when the read fails.</p>
 
                     </p>
                 </div>
@@ -189,6 +190,10 @@ Returns <code>(Result Int String)</code> with the number of bytes read.</p>
                     <p class="doc">
                         <p>reads until a newline character, returning the line including
 the delimiter. Returns <code>(Result String String)</code>.</p>
+<p>A stream that ends before the newline yields the buffered remainder as a short
+line; if nothing is buffered the result is <code>Error &quot;connection closed&quot;</code>. A
+stream that fails yields <code>Error &quot;read error&quot;</code> and consumes nothing, so a
+later call resumes from the same place.</p>
 
                     </p>
                 </div>
@@ -208,8 +213,11 @@ the delimiter. Returns <code>(Result String String)</code>.</p>
                         (read-n br n)
                     </pre>
                     <p class="doc">
-                        <p>reads exactly <code>n</code> bytes. Returns <code>(Result (Array Byte) String)</code>.
-May return fewer bytes on EOF.</p>
+                        <p>reads exactly <code>n</code> bytes. Returns <code>(Result (Array Byte) String)</code>.</p>
+<p>A stream that ends early yields the bytes it did produce; if that is none the
+result is <code>Error &quot;connection closed&quot;</code>. A stream that fails yields
+<code>Error &quot;read error&quot;</code> and the bytes already copied out are gone — unlike
+<code>read-line</code>, a partial <code>read-n</code> cannot be resumed.</p>
 
                     </p>
                 </div>
@@ -230,6 +238,7 @@ May return fewer bytes on EOF.</p>
                     </pre>
                     <p class="doc">
                         <p>reads until the given delimiter byte. Returns <code>(Result String String)</code>.</p>
+<p>Ends and fails exactly like <code>read-line</code>, which is this function with <code>\n</code>.</p>
 
                     </p>
                 </div>

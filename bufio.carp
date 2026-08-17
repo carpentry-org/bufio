@@ -38,15 +38,19 @@ Implement these for your stream type to use BufReader:
     "BufReader_create_")
   (private read-line-)
   (hidden read-line-)
-  (register read-line- (Fn [&BufReader] String) "BufReader_read_MINUS_line_")
+  (register read-line-
+    (Fn [&BufReader &Int] String)
+    "BufReader_read_MINUS_line_")
   (private read-until-)
   (hidden read-until-)
   (register read-until-
-    (Fn [&BufReader Char] String)
+    (Fn [&BufReader Char &Int] String)
     "BufReader_read_MINUS_until_")
   (private read-n-)
   (hidden read-n-)
-  (register read-n- (Fn [&BufReader Int] (Array Byte)) "BufReader_read_MINUS_n_")
+  (register read-n-
+    (Fn [&BufReader Int &Int] (Array Byte))
+    "BufReader_read_MINUS_n_")
   (private read-append-)
   (hidden read-append-)
   (register read-append-
@@ -71,34 +75,52 @@ Implement these for your stream type to use BufReader:
   (implements copy BufReader.copy)
 
   (doc read-line "reads until a newline character, returning the line including
-the delimiter. Returns `(Result String String)`.")
+the delimiter. Returns `(Result String String)`.
+
+A stream that ends before the newline yields the buffered remainder as a short
+line; if nothing is buffered the result is `Error \"connection closed\"`. A
+stream that fails yields `Error \"read error\"` and consumes nothing, so a
+later call resumes from the same place.")
   (defn read-line [br]
-    (let [s (read-line- br)]
-      (if (String.empty? &s)
-        (Result.Error @"connection closed")
+    (let [status 0
+          s (read-line- br &status)]
+      (cond
+        (< status 0) (Result.Error @"read error")
+        (String.empty? &s) (Result.Error @"connection closed")
         (Result.Success s))))
 
   (doc read-until
-    "reads until the given delimiter byte. Returns `(Result String String)`.")
+    "reads until the given delimiter byte. Returns `(Result String String)`.
+
+Ends and fails exactly like `read-line`, which is this function with `\\n`.")
   (defn read-until [br delim]
-    (let [s (read-until- br delim)]
-      (if (String.empty? &s)
-        (Result.Error @"connection closed")
+    (let [status 0
+          s (read-until- br delim &status)]
+      (cond
+        (< status 0) (Result.Error @"read error")
+        (String.empty? &s) (Result.Error @"connection closed")
         (Result.Success s))))
 
   (doc read-n "reads exactly `n` bytes. Returns `(Result (Array Byte) String)`.
-May return fewer bytes on EOF.")
+
+A stream that ends early yields the bytes it did produce; if that is none the
+result is `Error \"connection closed\"`. A stream that fails yields
+`Error \"read error\"` and the bytes already copied out are gone — unlike
+`read-line`, a partial `read-n` cannot be resumed.")
   (defn read-n [br n]
-    (let [arr (read-n- br n)]
-      (if (= (Array.length &arr) 0)
-        (Result.Error @"connection closed")
+    (let [status 0
+          arr (read-n- br n &status)]
+      (cond
+        (< status 0) (Result.Error @"read error")
+        (Array.empty? &arr) (Result.Error @"connection closed")
         (Result.Success arr))))
 
   (doc read-append "reads available data and appends to the byte buffer.
-Returns `(Result Int String)` with the number of bytes read.")
+Returns `(Result Int String)` with the number of bytes read; `0` means the
+stream ended. Nothing is appended when the read fails.")
   (defn read-append [br buf]
     (let [n (read-append- br buf)]
-      (if (= n -1) (Result.Error @"read error") (Result.Success n))))
+      (if (< n 0) (Result.Error @"read error") (Result.Success n))))
 
   (doc write "buffers string data for writing. Call `flush` to send.
 
