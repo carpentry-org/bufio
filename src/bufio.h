@@ -33,6 +33,8 @@ typedef struct {
 
 /* --- Construction / destruction --- */
 
+/* A buffer that could not be allocated is NULL with capacity 0, holding
+   nothing; bufio_reserve allocates it on first use. */
 BufReader BufReader_create_(void* inner, bufio_read_fn rfn,
                             bufio_write_fn wfn, bufio_close_fn cfn) {
   BufReader br;
@@ -43,10 +45,10 @@ BufReader BufReader_create_(void* inner, bufio_read_fn rfn,
   br.rbuf = CARP_MALLOC(BUFIO_DEFAULT_CAP);
   br.rbuf_len = 0;
   br.rbuf_pos = 0;
-  br.rbuf_cap = BUFIO_DEFAULT_CAP;
+  br.rbuf_cap = br.rbuf ? BUFIO_DEFAULT_CAP : 0;
   br.wbuf = CARP_MALLOC(BUFIO_DEFAULT_CAP);
   br.wbuf_len = 0;
-  br.wbuf_cap = BUFIO_DEFAULT_CAP;
+  br.wbuf_cap = br.wbuf ? BUFIO_DEFAULT_CAP : 0;
   return br;
 }
 
@@ -92,8 +94,27 @@ static int bufio_reserve_array(Array* buf, size_t extra) {
   return 0;
 }
 
-static String bufio_empty_string(void) {
+/* Copy of the `used` bytes of `src` with capacity `cap`, falling back to a
+   tight buffer and then to none; `*cap_out` is the capacity obtained. */
+static char* bufio_dup_buf(const char* src, int used, int cap, int* cap_out) {
+  char* buf = cap > 0 ? CARP_MALLOC((size_t)cap) : NULL;
+  *cap_out = buf ? cap : 0;
+  if (!buf && used > 0) {
+    buf = CARP_MALLOC((size_t)used);
+    *cap_out = buf ? used : 0;
+  }
+  if (buf && used > 0) memcpy(buf, src, (size_t)used);
+  return buf;
+}
+
+/* Empty string for a read that produced nothing; NULL with `*status` set to
+   BUFIO_ERR if even one byte cannot be had. */
+static String bufio_empty_string(int* status) {
   String s = CARP_MALLOC(1);
+  if (!s) {
+    *status = BUFIO_ERR;
+    return s;
+  }
   s[0] = '\0';
   return s;
 }
@@ -128,6 +149,10 @@ String BufReader_read_MINUS_until_(BufReader* br, char delim, int* status) {
       if (br->rbuf[i] == delim) {
         int len = i - br->rbuf_pos + 1;
         String s = CARP_MALLOC(len + 1);
+        if (!s) {
+          *status = BUFIO_ERR;
+          return bufio_empty_string(status);
+        }
         memcpy(s, br->rbuf + br->rbuf_pos, len);
         s[len] = '\0';
         br->rbuf_pos += len;
@@ -138,19 +163,23 @@ String BufReader_read_MINUS_until_(BufReader* br, char delim, int* status) {
     int r = bufreader_fill(br);
     if (r < 0) {
       *status = BUFIO_ERR;
-      return bufio_empty_string();
+      return bufio_empty_string(status);
     }
     if (r == 0) {
       int avail = bufreader_available(br);
       *status = BUFIO_EOF;
       if (avail > 0) {
         String s = CARP_MALLOC(avail + 1);
+        if (!s) {
+          *status = BUFIO_ERR;
+          return bufio_empty_string(status);
+        }
         memcpy(s, br->rbuf + br->rbuf_pos, avail);
         s[avail] = '\0';
         br->rbuf_pos += avail;
         return s;
       }
-      return bufio_empty_string();
+      return bufio_empty_string(status);
     }
   }
 }
@@ -261,15 +290,11 @@ BufReader BufReader_copy(BufReader* br) {
   c.read_fn = br->read_fn;
   c.write_fn = br->write_fn;
   c.close_fn = br->close_fn;
-  c.rbuf_cap = br->rbuf_cap;
-  c.rbuf_len = br->rbuf_len;
-  c.rbuf_pos = br->rbuf_pos;
-  c.rbuf = CARP_MALLOC(c.rbuf_cap);
-  memcpy(c.rbuf, br->rbuf, c.rbuf_len);
-  c.wbuf_cap = br->wbuf_cap;
-  c.wbuf_len = br->wbuf_len;
-  c.wbuf = CARP_MALLOC(c.wbuf_cap);
-  memcpy(c.wbuf, br->wbuf, c.wbuf_len);
+  c.rbuf = bufio_dup_buf(br->rbuf, br->rbuf_len, br->rbuf_cap, &c.rbuf_cap);
+  c.rbuf_len = c.rbuf ? br->rbuf_len : 0;
+  c.rbuf_pos = c.rbuf ? br->rbuf_pos : 0;
+  c.wbuf = bufio_dup_buf(br->wbuf, br->wbuf_len, br->wbuf_cap, &c.wbuf_cap);
+  c.wbuf_len = c.wbuf ? br->wbuf_len : 0;
   return c;
 }
 

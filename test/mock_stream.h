@@ -104,6 +104,20 @@ static void mock_set_read_limits(int budget, int fail_code) {
 
 static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
 
+/* Puts a reader in the state BufReader_create_ leaves behind when neither
+   buffer could be allocated. */
+static void mock_starve_buffers(BufReader* br) {
+  if (br->rbuf) CARP_FREE(br->rbuf);
+  if (br->wbuf) CARP_FREE(br->wbuf);
+  br->rbuf = NULL;
+  br->rbuf_cap = 0;
+  br->rbuf_len = 0;
+  br->rbuf_pos = 0;
+  br->wbuf = NULL;
+  br->wbuf_cap = 0;
+  br->wbuf_len = 0;
+}
+
 /* read-n's C entry point unguarded by the Carp wrapper; -1 on error status. */
 static int mock_read_n_raw(BufReader* br, int n) {
   int status = BUFIO_OK;
