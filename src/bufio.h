@@ -7,6 +7,11 @@
 #define BUFIO_DEFAULT_CAP 8192
 #define BUFIO_MAX_CAP ((size_t)INT_MAX)
 
+/* Values written to the `status` out-parameter of the read operations. */
+#define BUFIO_OK 0
+#define BUFIO_EOF 1
+#define BUFIO_ERR (-1)
+
 /* Function pointer types for stream operations */
 typedef int (*bufio_read_fn)(void* inner, char* buf, int len);
 typedef int (*bufio_write_fn)(void* inner, const char* buf, int len);
@@ -87,6 +92,14 @@ static int bufio_reserve_array(Array* buf, size_t extra) {
   return 0;
 }
 
+static String bufio_empty_string(void) {
+  String s = CARP_MALLOC(1);
+  s[0] = '\0';
+  return s;
+}
+
+/* Returns the byte count, 0 at end of stream, or negative on failure; nothing
+   already buffered is consumed. */
 static int bufreader_fill(BufReader* br) {
   /* compact */
   if (br->rbuf_pos > 0) {
@@ -109,7 +122,7 @@ static int bufreader_available(BufReader* br) {
 
 /* --- Read operations --- */
 
-String BufReader_read_MINUS_until_(BufReader* br, char delim) {
+String BufReader_read_MINUS_until_(BufReader* br, char delim, int* status) {
   while (1) {
     for (int i = br->rbuf_pos; i < br->rbuf_len; i++) {
       if (br->rbuf[i] == delim) {
@@ -118,12 +131,18 @@ String BufReader_read_MINUS_until_(BufReader* br, char delim) {
         memcpy(s, br->rbuf + br->rbuf_pos, len);
         s[len] = '\0';
         br->rbuf_pos += len;
+        *status = BUFIO_OK;
         return s;
       }
     }
     int r = bufreader_fill(br);
-    if (r <= 0) {
+    if (r < 0) {
+      *status = BUFIO_ERR;
+      return bufio_empty_string();
+    }
+    if (r == 0) {
       int avail = bufreader_available(br);
+      *status = BUFIO_EOF;
       if (avail > 0) {
         String s = CARP_MALLOC(avail + 1);
         memcpy(s, br->rbuf + br->rbuf_pos, avail);
@@ -131,23 +150,21 @@ String BufReader_read_MINUS_until_(BufReader* br, char delim) {
         br->rbuf_pos += avail;
         return s;
       }
-      /* Return empty string to signal EOF/error */
-      String s = CARP_MALLOC(1);
-      s[0] = '\0';
-      return s;
+      return bufio_empty_string();
     }
   }
 }
 
-String BufReader_read_MINUS_line_(BufReader* br) {
-  return BufReader_read_MINUS_until_(br, '\n');
+String BufReader_read_MINUS_line_(BufReader* br, int* status) {
+  return BufReader_read_MINUS_until_(br, '\n', status);
 }
 
-Array BufReader_read_MINUS_n_(BufReader* br, int n) {
+Array BufReader_read_MINUS_n_(BufReader* br, int n, int* status) {
   Array result;
   result.data = CARP_MALLOC(n);
   result.capacity = n;
   result.len = 0;
+  *status = BUFIO_OK;
 
   while (result.len < n) {
     int avail = bufreader_available(br);
@@ -159,7 +176,10 @@ Array BufReader_read_MINUS_n_(BufReader* br, int n) {
       br->rbuf_pos += take;
     } else {
       int r = bufreader_fill(br);
-      if (r <= 0) break;
+      if (r <= 0) {
+        *status = r < 0 ? BUFIO_ERR : BUFIO_EOF;
+        break;
+      }
     }
   }
   return result;

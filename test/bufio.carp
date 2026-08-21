@@ -6,6 +6,7 @@
   (Fn [&String Int] BufReader)
   "mock_bufreader_create")
 (register mock-set-write-limits (Fn [Int Int Int] ()) "mock_set_write_limits")
+(register mock-set-read-limits (Fn [Int Int] ()) "mock_set_read_limits")
 (register mock-buffered-write-len
   (Fn [&BufReader] Int)
   "mock_buffered_write_len")
@@ -56,6 +57,26 @@ world
     "read-line returns error on empty stream")
 
   (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "partial line without a newline" 0)]
+      (mock-set-read-limits 7 -1)
+      (let-do [r (BufReader.read-line &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a read error partway through a line is not a successful short line")
+
+  (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "hello" 0)]
+      (mock-set-read-limits 0 -1)
+      (let-do [r (BufReader.read-line &br)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a read error with nothing buffered is distinct from a closed connection")
+
+  (assert-equal test
     "key;"
     &(let-do [br (mock-bufreader-create "key;value;" 0)
               r (BufReader.read-until &br \;)]
@@ -72,6 +93,28 @@ world
       (mock-cleanup)
       (match r (Result.Success s) s (Result.Error _) @"ERROR"))
     "read-until returns all data when delimiter not found")
+
+  (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "keyvalue;" 0)]
+      (mock-set-read-limits 3 -1)
+      (let-do [r (BufReader.read-until &br \;)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a read error partway through read-until is not a successful short read")
+
+  (assert-equal test
+    "keyvalue;"
+    &(let-do [br (mock-bufreader-create "keyvalue;" 0)]
+      (mock-set-read-limits 3 -1)
+      (ignore (BufReader.read-until &br \;))
+      (mock-set-read-limits -1 -1)
+      (let-do [r (BufReader.read-until &br \;)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success s) s (Result.Error _) @"ERROR")))
+    "retrying a failed read-until resumes instead of losing the buffered prefix")
 
   (assert-equal test
     "hello"
@@ -96,6 +139,26 @@ world
     "read-n returns fewer bytes at EOF")
 
   (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "hello world" 0)]
+      (mock-set-read-limits 3 -1)
+      (let-do [r (BufReader.read-n &br 10)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "a read error partway through read-n is not a successful short read")
+
+  (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "hello" 0)]
+      (mock-set-read-limits 0 -1)
+      (let-do [r (BufReader.read-n &br 5)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "read-n tells a failed read from a closed connection")
+
+  (assert-equal test
     "connection closed"
     &(let-do [br (mock-bufreader-create "" 0)
               r (BufReader.read-n &br 5)]
@@ -113,6 +176,38 @@ world
       (mock-cleanup)
       (match r (Result.Success n) n (Result.Error _) -1))
     "read-append returns byte count")
+
+  (assert-equal test
+    0
+    (let-do [br (mock-bufreader-create "" 0)
+             buf (Array.replicate 0 &(Byte.from-int 0))
+             r (BufReader.read-append &br &buf)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success n) n (Result.Error _) -1))
+    "read-append reports the end of the stream as zero bytes, not an error")
+
+  (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "hello" 0)
+              buf (Array.replicate 0 &(Byte.from-int 0))]
+      (mock-set-read-limits 0 -1)
+      (let-do [r (BufReader.read-append &br &buf)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "read-append reports a failed read as an error")
+
+  (assert-equal test
+    "read error"
+    &(let-do [br (mock-bufreader-create "hello" 0)
+              buf (Array.replicate 0 &(Byte.from-int 0))]
+      (mock-set-read-limits 0 -5)
+      (let-do [r (BufReader.read-append &br &buf)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e)))
+    "read-append reports a failure code other than -1 as an error too")
 
   (assert-equal test
     "hello world"
