@@ -106,14 +106,18 @@ Ends and fails exactly like `read-line`, which is this function with `\\n`.")
 A stream that ends early yields the bytes it did produce; if that is none the
 result is `Error \"connection closed\"`. A stream that fails yields
 `Error \"read error\"` and the bytes already copied out are gone — unlike
-`read-line`, a partial `read-n` cannot be resumed.")
+`read-line`, a partial `read-n` cannot be resumed.
+
+An `n` below `1` is `Error \"invalid count\"` and reads nothing.")
   (defn read-n [br n]
-    (let [status 0
-          arr (read-n- br n &status)]
-      (cond
-        (< status 0) (Result.Error @"read error")
-        (Array.empty? &arr) (Result.Error @"connection closed")
-        (Result.Success arr))))
+    (if (< n 1)
+      (Result.Error @"invalid count")
+      (let [status 0
+            arr (read-n- br n &status)]
+        (cond
+          (< status 0) (Result.Error @"read error")
+          (Array.empty? &arr) (Result.Error @"connection closed")
+          (Result.Success arr)))))
 
   (doc read-append "reads available data and appends to the byte buffer.
 Returns `(Result Int String)` with the number of bytes read; `0` means the

@@ -161,15 +161,23 @@ String BufReader_read_MINUS_line_(BufReader* br, int* status) {
 
 Array BufReader_read_MINUS_n_(BufReader* br, int n, int* status) {
   Array result;
-  result.data = CARP_MALLOC(n);
-  result.capacity = n;
+  result.data = NULL;
+  result.capacity = 0;
   result.len = 0;
   *status = BUFIO_OK;
+  if (n <= 0) return result;
 
-  while (result.len < n) {
+  result.data = CARP_MALLOC((size_t)n);
+  if (!result.data) {
+    *status = BUFIO_ERR;
+    return result;
+  }
+  result.capacity = (size_t)n;
+
+  while (result.len < (size_t)n) {
     int avail = bufreader_available(br);
     if (avail > 0) {
-      int want = n - result.len;
+      int want = n - (int)result.len;
       int take = avail < want ? avail : want;
       memcpy((char*)result.data + result.len, br->rbuf + br->rbuf_pos, take);
       result.len += take;

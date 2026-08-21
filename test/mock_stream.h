@@ -104,6 +104,14 @@ static void mock_set_read_limits(int budget, int fail_code) {
 
 static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
 
+/* read-n's C entry point unguarded by the Carp wrapper; -1 on error status. */
+static int mock_read_n_raw(BufReader* br, int n) {
+  int status = BUFIO_OK;
+  Array a = BufReader_read_MINUS_n_(br, n, &status);
+  if (a.data) CARP_FREE(a.data);
+  return status < 0 ? -1 : (int)a.len;
+}
+
 /* Long-typed view of bufio_next_cap, which takes and returns size_t; -1 for an
    argument that not every size_t can represent. */
 static int64_t bufio_next_cap_long(int64_t have, int64_t need) {

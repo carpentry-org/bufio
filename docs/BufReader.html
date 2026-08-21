@@ -218,6 +218,7 @@ later call resumes from the same place.</p>
 result is <code>Error &quot;connection closed&quot;</code>. A stream that fails yields
 <code>Error &quot;read error&quot;</code> and the bytes already copied out are gone — unlike
 <code>read-line</code>, a partial <code>read-n</code> cannot be resumed.</p>
+<p>An <code>n</code> below <code>1</code> is <code>Error &quot;invalid count&quot;</code> and reads nothing.</p>
 
                     </p>
                 </div>
