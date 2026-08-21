@@ -10,6 +10,7 @@
 (register mock-buffered-write-len
   (Fn [&BufReader] Int)
   "mock_buffered_write_len")
+(register mock-read-n-raw (Fn [&BufReader Int] Int) "mock_read_n_raw")
 (register bufio-next-cap-long (Fn [Long Long] Long) "bufio_next_cap_long")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
@@ -166,6 +167,54 @@ world
       (mock-cleanup)
       (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
     "read-n returns error on empty stream")
+
+  (assert-equal test
+    "invalid count"
+    &(let-do [br (mock-bufreader-create "hello world" 0)
+              r (BufReader.read-n &br -1)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
+    "read-n rejects a negative count instead of crashing")
+
+  (assert-equal test
+    "invalid count"
+    &(let-do [br (mock-bufreader-create "hello world" 0)
+              r (BufReader.read-n &br 0)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success _) @"UNEXPECTED" (Result.Error e) e))
+    "read-n rejects a count of zero")
+
+  (assert-equal test
+    "hello"
+    &(let-do [br (mock-bufreader-create "hello world" 0)
+              _rejected (BufReader.read-n &br -1)
+              r (BufReader.read-n &br 5)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r
+        (Result.Success arr) (mock-bytes-to-string &arr)
+        (Result.Error _) @"ERROR"))
+    "a rejected count leaves the stream where it was")
+
+  (assert-equal test
+    0
+    (let-do [br (mock-bufreader-create "hello world" 0)
+             n (mock-read-n-raw &br -1)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      n)
+    "the C entry point reads nothing for a negative count")
+
+  (assert-equal test
+    5
+    (let-do [br (mock-bufreader-create "hello world" 0)
+             n (mock-read-n-raw &br 5)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      n)
+    "the C entry point still reads a positive count")
 
   (assert-equal test
     5
