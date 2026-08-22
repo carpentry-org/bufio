@@ -129,7 +129,13 @@ static int bufreader_fill(BufReader* br) {
     br->rbuf_len = remaining;
     br->rbuf_pos = 0;
   }
-  if (bufio_reserve(&br->rbuf, &br->rbuf_cap, (size_t)br->rbuf_len, 1) != 0)
+  /* A capacity below the default belongs to a reader recovering from a failed
+     allocation. */
+  size_t extra = br->rbuf_cap < BUFIO_DEFAULT_CAP
+                   ? (size_t)(BUFIO_DEFAULT_CAP - br->rbuf_len)
+                   : 1;
+  if (bufio_reserve(&br->rbuf, &br->rbuf_cap, (size_t)br->rbuf_len, extra) != 0
+      && bufio_reserve(&br->rbuf, &br->rbuf_cap, (size_t)br->rbuf_len, 1) != 0)
     return -1;
   int space = br->rbuf_cap - br->rbuf_len;
   int n = br->read_fn(br->inner, br->rbuf + br->rbuf_len, space);
@@ -247,7 +253,7 @@ int BufReader_write_(BufReader* br, String* data) {
   size_t len = strlen(*data);
   if (bufio_reserve(&br->wbuf, &br->wbuf_cap, (size_t)br->wbuf_len, len) != 0)
     return -1;
-  memcpy(br->wbuf + br->wbuf_len, *data, len);
+  if (len > 0) memcpy(br->wbuf + br->wbuf_len, *data, len);
   br->wbuf_len += (int)len;
   return (int)len;
 }
@@ -256,7 +262,7 @@ int BufReader_write_MINUS_bytes_(BufReader* br, Array* data) {
   size_t len = data->len;
   if (bufio_reserve(&br->wbuf, &br->wbuf_cap, (size_t)br->wbuf_len, len) != 0)
     return -1;
-  memcpy(br->wbuf + br->wbuf_len, data->data, len);
+  if (len > 0) memcpy(br->wbuf + br->wbuf_len, data->data, len);
   br->wbuf_len += (int)len;
   return (int)len;
 }

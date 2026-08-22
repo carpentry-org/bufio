@@ -20,12 +20,14 @@ typedef struct {
   int write_fail_code;
   int read_budget;
   int read_fail_code;
+  int read_calls;
 } MockStream;
 
 static MockStream* g_mock = NULL;
 
 static int mock_stream_read(void* inner, char* buf, int len) {
   MockStream* ms = (MockStream*)inner;
+  ms->read_calls++;
   if (ms->read_budget >= 0) {
     if (ms->read_budget == 0) return ms->read_fail_code;
     if (len > ms->read_budget) len = ms->read_budget;
@@ -79,6 +81,7 @@ static BufReader mock_bufreader_create(String* data, int chunk_size) {
   ms->write_fail_code = -1;
   ms->read_budget = -1;
   ms->read_fail_code = -1;
+  ms->read_calls = 0;
   g_mock = ms;
   return BufReader_create_(
     (void*)ms, mock_stream_read, mock_stream_write, mock_stream_close);
@@ -103,6 +106,8 @@ static void mock_set_read_limits(int budget, int fail_code) {
 }
 
 static int mock_buffered_write_len(BufReader* br) { return br->wbuf_len; }
+
+static int mock_read_calls(void) { return g_mock ? g_mock->read_calls : -1; }
 
 /* Puts a reader in the state BufReader_create_ leaves behind when neither
    buffer could be allocated. */

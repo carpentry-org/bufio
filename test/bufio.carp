@@ -12,6 +12,7 @@
   "mock_buffered_write_len")
 (register mock-read-n-raw (Fn [&BufReader Int] Int) "mock_read_n_raw")
 (register mock-starve-buffers (Fn [&BufReader] ()) "mock_starve_buffers")
+(register mock-read-calls (Fn [] Int) "mock_read_calls")
 (register bufio-next-cap-long (Fn [Long Long] Long) "bufio_next_cap_long")
 (register mock-get-output (Fn [] String) "mock_get_output")
 (register mock-is-closed? (Fn [] Bool) "mock_is_closed")
@@ -493,4 +494,30 @@ world
         (BufReader.delete c)
         (BufReader.delete br)
         (mock-cleanup)
-        (match r (Result.Success s) s (Result.Error _) @"ERROR"))) "a copy of a reader with no buffers allocates on first use"))
+        (match r (Result.Success s) s (Result.Error _) @"ERROR"))) "a copy of a reader with no buffers allocates on first use")
+
+  (assert-equal test
+    1
+    (let-do [payload (String.repeat 400 "0123456789")
+             br (mock-bufreader-create &payload 0)]
+      (mock-starve-buffers &br)
+      (ignore (BufReader.read-n &br 4000))
+      (let-do [calls (mock-read-calls)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        calls))
+    "a reader with no read buffer refills at the default capacity, not one byte per call")
+
+  (assert-equal test
+    "hi"
+    &(let-do [br (mock-bufreader-create "" 0)]
+      (mock-starve-buffers &br)
+      (ignore (BufReader.write &br ""))
+      (ignore (BufReader.write-bytes &br &(the (Array Byte) [])))
+      (ignore (BufReader.write &br "hi"))
+      (ignore (BufReader.flush &br))
+      (let-do [output (mock-get-output)]
+        (BufReader.delete br)
+        (mock-cleanup)
+        output))
+    "an empty write to a reader with no write buffer buffers nothing and leaves it usable"))
