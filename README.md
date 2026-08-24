@@ -5,7 +5,7 @@ Generic buffered I/O for Carp.
 ## Installation
 
 ```clojure
-(load "git@github.com:carpentry-org/bufio@0.1.0")
+(load "git@github.com:carpentry-org/bufio@0.1.1")
 ```
 
 ## Usage
