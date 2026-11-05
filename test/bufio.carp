@@ -120,6 +120,16 @@ world
     "retrying a failed read-until resumes instead of losing the buffered prefix")
 
   (assert-equal test
+    "e;"
+    &(let-do [br (mock-bufreader-create "abcd;e;f;" 4)
+              _first (BufReader.read-until &br \;)
+              r (BufReader.read-until &br \;)]
+      (BufReader.delete br)
+      (mock-cleanup)
+      (match r (Result.Success s) s (Result.Error _) @"ERROR"))
+    "read-until stops at a delimiter that starts a later read, and the next call reads the line after it")
+
+  (assert-equal test
     "hello"
     &(let-do [br (mock-bufreader-create "hello world" 0)
               r (BufReader.read-n &br 5)]

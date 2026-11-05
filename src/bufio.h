@@ -150,8 +150,9 @@ static int bufreader_available(BufReader* br) {
 /* --- Read operations --- */
 
 String BufReader_read_MINUS_until_(BufReader* br, char delim, int* status) {
+  int scanned = 0;
   while (1) {
-    for (int i = br->rbuf_pos; i < br->rbuf_len; i++) {
+    for (int i = br->rbuf_pos + scanned; i < br->rbuf_len; i++) {
       if (br->rbuf[i] == delim) {
         int len = i - br->rbuf_pos + 1;
         String s = CARP_MALLOC(len + 1);
@@ -166,6 +167,7 @@ String BufReader_read_MINUS_until_(BufReader* br, char delim, int* status) {
         return s;
       }
     }
+    scanned = bufreader_available(br);
     int r = bufreader_fill(br);
     if (r < 0) {
       *status = BUFIO_ERR;
